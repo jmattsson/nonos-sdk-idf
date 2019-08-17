@@ -1,0 +1,80 @@
+# Component support for esptool.py. Doesn't do much by itself,
+# components have their own flash targets that can use these variables.
+ESPPORT ?= $(CONFIG_ESPTOOLPY_PORT)
+ESPBAUD ?= $(CONFIG_ESPTOOLPY_BAUD)
+ESPFLASHMODE ?= $(CONFIG_ESPTOOLPY_FLASHMODE)
+ESPFLASHFREQ ?= $(CONFIG_ESPTOOLPY_FLASHFREQ)
+ESPFLASHSIZE ?= $(CONFIG_ESPTOOLPY_FLASHSIZE)
+
+CONFIG_ESPTOOLPY_COMPRESSED ?=
+
+PYTHON ?= $(call dequote,$(CONFIG_PYTHON))
+
+# two commands that can be used from other components
+# to invoke esptool.py (with or without serial port args)
+#
+ESPTOOLPY_SRC := $(COMPONENT_PATH)/esptool/esptool.py
+ESPTOOLPY := $(PYTHON) $(ESPTOOLPY_SRC) --chip esp8266
+ESPTOOLPY_SERIAL := $(ESPTOOLPY) --port $(ESPPORT) --baud $(ESPBAUD) --before $(CONFIG_ESPTOOLPY_BEFORE) --after $(CONFIG_ESPTOOLPY_AFTER)
+
+ESPTOOL_FLASH_OPTIONS := --flash_mode $(ESPFLASHMODE) --flash_freq $(ESPFLASHFREQ) --flash_size $(ESPFLASHSIZE)
+ifdef CONFIG_ESPTOOLPY_FLASHSIZE_DETECT
+ESPTOOL_WRITE_FLASH_OPTIONS := --flash_mode $(ESPFLASHMODE) --flash_freq $(ESPFLASHFREQ) --flash_size detect
+else
+ESPTOOL_WRITE_FLASH_OPTIONS := $(ESPTOOL_FLASH_OPTIONS)
+endif
+
+ESPTOOL_ELF2IMAGE_OPTIONS :=
+
+ESPTOOLPY_WRITE_FLASH=$(ESPTOOLPY_SERIAL) write_flash $(if $(CONFIG_ESPTOOLPY_COMPRESSED),-z,-u) $(ESPTOOL_WRITE_FLASH_OPTIONS)
+
+ESPTOOL_ALL_FLASH_ARGS += 0 0x00000.bin 0x10000 0x10000.bin
+
+$(APP_BIN): $(APP_ELF) $(ESPTOOLPY_SRC) | check_python_dependencies
+	$(ESPTOOLPY) elf2image $(ESPTOOL_FLASH_OPTIONS) $(ESPTOOL_ELF2IMAGE_OPTIONS) -o $(dir $@) $<
+
+flash: all_binaries $(ESPTOOLPY_SRC) $(call prereq_if_explicit,erase_flash) partition_table_get_info | check_python_dependencies
+	@echo "Flashing binaries to serial port $(ESPPORT)..."
+	$(ESPTOOLPY_WRITE_FLASH) $(ESPTOOL_ALL_FLASH_ARGS)
+
+app-flash: $(APP_BIN) $(ESPTOOLPY_SRC) $(call prereq_if_explicit,erase_flash) partition_table_get_info | check_python_dependencies
+	@echo "Flashing app to serial port $(ESPPORT), offset $(APP_OFFSET)..."
+	$(ESPTOOLPY_WRITE_FLASH) $(APP_OFFSET) $(ESPTOOL_ALL_FLASH_ARGS)
+
+# Submodules normally added in component.mk, but can be added
+# at the project level as long as qualified path
+COMPONENT_SUBMODULES += $(COMPONENT_PATH)/esptool
+
+erase_flash: | check_python_dependencies
+	@echo "Erasing entire flash..."
+	$(ESPTOOLPY_SERIAL) erase_flash
+
+MONITORBAUD ?= $(CONFIG_MONITOR_BAUD)
+
+MONITOR_PYTHON := $(PYTHON)
+
+ifeq ("$(OS)","Windows_NT")
+# miniterm and idf_monitor both need a Windows Console PTY in order
+# to correctly handle user input
+MONITOR_PYTHON := winpty $(PYTHON)
+endif
+
+# note: if you want to run miniterm from command line, can simply run
+# miniterm.py on the console. The '$(PYTHON) -m serial.tools.miniterm'
+# is to allow for the $(PYTHON) variable overriding the python path.
+simple_monitor: $(call prereq_if_explicit,%flash) | check_python_dependencies
+	$(MONITOR_PYTHON) -m serial.tools.miniterm --rts 0 --dtr 0 --raw $(ESPPORT) $(MONITORBAUD)
+
+PRINT_FILTER ?=
+
+MONITOR_OPTS := --baud $(MONITORBAUD) --port $(ESPPORT) --toolchain-prefix $(CONFIG_TOOLPREFIX) --make "$(MAKE)" --print_filter "$(PRINT_FILTER)"
+
+monitor: $(call prereq_if_explicit,%flash) | check_python_dependencies
+	$(summary) MONITOR
+	[ -f $(APP_ELF) ] || echo "*** 'make monitor' target requires an app to be compiled and flashed first."
+	[ -f $(APP_ELF) ] || echo "*** Run 'make flash monitor' to build, flash and monitor"
+	[ -f $(APP_ELF) ] || echo "*** Or alternatively 'make simple_monitor' to view the serial port as-is."
+	[ -f $(APP_ELF) ] || exit 1
+	$(MONITOR_PYTHON) $(IDF_PATH)/tools/idf_monitor.py $(MONITOR_OPTS) $(APP_ELF)
+
+.PHONY: erase_flash

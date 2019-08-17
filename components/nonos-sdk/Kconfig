@@ -1,0 +1,15 @@
+menu "Non-OS SDK configuration"
+
+    config USE_SDK_LWIP
+        bool "Use the Non-OS SDK version of lwIP"
+        default y
+
+    config USE_SDK_MBEDTLS
+        bool "Use the Non-OS SDK version of mbedTLS"
+        default y
+
+    config USE_SDK_SSL
+        bool "Use the Non-OS SDK version of libSSL"
+        default y
+
+endmenu
