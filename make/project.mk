@@ -440,7 +440,7 @@ export CPPFLAGS
 APP_ELF:=$(BUILD_DIR_BASE)/$(PROJECT_NAME).elf
 APP_MAP:=$(APP_ELF:.elf=.map)
 #APP_BIN:=$(APP_ELF:.elf=.bin)
-APP_BIN:=0x00000.bin 0x10000.bin
+APP_BIN:=$(addprefix $(BUILD_DIR_BASE)/,0x00000.bin 0x10000.bin)
 
 # once we know component paths, we can include the config generation targets
 include $(IDF_PATH)/make/project_config.mk
