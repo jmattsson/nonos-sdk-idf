@@ -1,23 +1,11 @@
+# The IDF only supports relative paths for the include dirs, so we have to
+# come up with the correct relative path to the build dir using realpath(1)
+#include $(COMPONENT_PATH)/relpath.mk
+include $(COMPONENT_PATH)/relpath.mk
+COMPONENT_ADD_INCLUDEDIRS:=$(call relpath,$(COMPONENT_BUILD_DIR)/sdk/include,$(COMPONENT_PATH))
+COMPONENT_ADD_LDFLAGS:=-L$(COMPONENT_BUILD_DIR)/sdk/ld
+COMPONENT_ADD_LINKERDEPS:=$(addprefix sdk/ld/,eagle.app.v6.ld eagle.rom.addr.v6.ld)
 COMPONENT_OWNBUILDTARGET := build
-
-NONOS_SDK_OPT_LIBS:=
-ifeq ($(CONFIG_USE_SDK_LWIP),y)
-  NONOS_SDK_OPT_LIBS+= -llwip_536
-endif
-
-ifeq ($(CONFIG_USE_SDK_MBEDTLS),y)
-  NONOS_SDK_OPT_LIBS+= -lmbedtls
-endif
-
-ifeq ($(CONFIG_USE_SDK_SSL),y)
-  NONOS_SDK_OPT_LIBS+= -lssl
-endif
-
-# Note: most LDFLAGS are in make/project.mk for ordering reasons
-COMPONENT_ADD_LDFLAGS := \
-  -L $(COMPONENT_BUILD_DIR)/sdk/lib \
-  -lmain \
-  $(NONOS_SDK_OPT_LIBS)
 
 NONOS_SDK_FILE_VER  := e4434aa730e78c63040ace360493aef420ec267c
 NONOS_SDK_VER       := 3.0-e4434aa
